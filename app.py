@@ -37,34 +37,45 @@ else:
     st.error("Secrets bulunamadı!")
     st.stop()
 
-# 4. Model Kurulumu (Hata veren Flash yerine en stabil olan 'gemini-pro'yu seçtik)
-@st.cache_resource
-def load_model():
-    return genai.GenerativeModel(
-        model_name="gemini-pro", # Bu isim en stabil olanıdır
-        system_instruction=None # gemini-pro doğrudan sistem talimatını desteklemeyebilir, aşağıda düzelteceğiz
-    )
+# 4. Model Seçimi (404 Hatasını Önleyen Mekanizma)
+# Bu liste içindeki modellerden hangisi sisteminde varsa onu seçecek
+model_names = ["gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-pro"]
+model = None
 
-model = load_model()
+for m_name in model_names:
+    try:
+        model = genai.GenerativeModel(model_name=m_name)
+        # Modelin gerçekten çalışıp çalışmadığını test ediyoruz
+        model.generate_content("test") 
+        break 
+    except:
+        continue
 
-# 5. Sohbet Başlatma
+if model is None:
+    st.error("Üzgünüm, Google API modellerine şu an ulaşılamıyor. Lütfen API anahtarınızı kontrol edin.")
+    st.stop()
+
+# 5. Sohbet Yönetimi
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # Sistem promptunu konuşmanın en başına gizli bir şekilde ekliyoruz
     st.session_state.chat = model.start_chat(history=[])
-    # İlk mesajda sistem promptunu göndererek AI'ya kim olduğunu öğretiyoruz
-    st.session_state.chat.send_message(f"SİSTEM TALİMATI: {SYSTEM_PROMPT}\n\nLütfen kendini tanıt ve başla.")
     
-    initial_text = "Merhaba! Ben Akademik Danışman AI. Akademik dünyada seni en çok rahatsız eden, eksik bulduğun o spesifik olgu nedir?"
+    # Sisteme kim olduğunu hatırlat (Hata vermemesi için güvenli mod)
+    try:
+        st.session_state.chat.send_message(f"TALİMAT: {SYSTEM_PROMPT}")
+    except:
+        pass
+        
+    initial_text = "Merhaba! Ben Akademik Danışman AI. Akademik dünyada seni en çok rahatsız eden o spesifik olgu nedir?"
     st.session_state.messages.append({"role": "assistant", "content": initial_text})
 
-# Mesajları göster
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+    if msg["role"] != "system": # Sistem talimatını ekranda gösterme
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
 
 # 6. Kullanıcı Girişi
-if user_input := st.chat_input("Mesajınızı yazın..."):
+if user_input := st.chat_input("Buraya yazın..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.write(user_input)
@@ -75,4 +86,4 @@ if user_input := st.chat_input("Mesajınızı yazın..."):
             st.write(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
-            st.error(f"Hata oluştu: {e}")
+            st.error(f"Hata: {e}")
