@@ -4,7 +4,7 @@ import google.generativeai as genai
 # Sayfa Ayarları
 st.set_page_config(page_title="Akademik Danışman AI", page_icon="🎓", layout="centered")
 
-# Stil Ayarları (Daha şık bir görünüm için)
+# Stil Ayarları
 st.markdown("""
     <style>
     .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
@@ -14,7 +14,7 @@ st.markdown("""
 st.title("🎓 Akademik Danışman AI")
 st.caption("Yüksek Lisans Tez ve Araştırma Sorusu Mimarı")
 
-# 1. Prompt Tanımı (Senin Protokolün)
+# 1. Prompt Tanımı
 SYSTEM_PROMPT = """
 Sen, yüksek lisans öğrencilerine tez konusu ve araştırma sorusu belirleme konusunda rehberlik eden, metodoloji uzmanı bir Akademik Danışman AI'sısın. Görevin, öğrenci en özgün ve uygulanabilir araştırma sorusuna ulaşana kadar ona Sokratik bir yöntemle rehberlik etmektir.
 
@@ -42,30 +42,35 @@ else:
     st.error("Hata: Streamlit Secrets kısmında 'GEMINI_API_KEY' bulunamadı.")
     st.stop()
 
-# Model Kurulumu (Hata payını azaltmak için flash modelini kullanıyoruz)
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction=SYSTEM_PROMPT
-)
+# 3. Model Kurulumu (Hata veren kısmı düzelttik)
+@st.cache_resource
+def load_model():
+    # Model ismi güncellendi: 'models/' ön eki ve '-latest' takısı eklendi
+    return genai.GenerativeModel(
+        model_name="models/gemini-1.5-flash-latest",
+        system_instruction=SYSTEM_PROMPT
+    )
 
-# 3. Sohbet Geçmişi Yönetimi (Session State)
+model = load_model()
+
+# 4. Sohbet Geçmişi Yönetimi (Session State)
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # Gemini'nin kendi chat objesini başlatıyoruz
+    # Gemini'nin chat objesini başlatıyoruz
     st.session_state.chat = model.start_chat(history=[])
     
-    # İlk mesaj (Başlatma sorusu)
+    # İlk karşılama mesajı
     initial_text = "Merhaba! Ben Akademik Danışman AI. Şu an akademik dünyada seni en çok rahatsız eden, eksik bulduğun veya 'bunun doğrusu aslında şu olabilir' dediğin o spesifik olgu nedir? Önce biraz ilgi alanlarından bahsedebilirsin."
     st.session_state.messages.append({"role": "assistant", "content": initial_text})
 
-# 4. Mesajları Ekranda Göster
+# 5. Mesajları Ekranda Göster
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 5. Kullanıcı Etkileşimi
+# 6. Kullanıcı Etkileşimi
 if prompt := st.chat_input("Mesajınızı buraya yazın..."):
-    # Kullanıcı mesajını ekrana bas ve hafızaya al
+    # Kullanıcı mesajını göster ve kaydet
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -73,11 +78,12 @@ if prompt := st.chat_input("Mesajınızı buraya yazın..."):
     # Gemini'den yanıt al
     with st.chat_message("assistant"):
         try:
-            # Yanıt gelene kadar bir yükleme simgesi gösterir
-            with st.spinner("Düşünüyorum..."):
+            with st.spinner("Hoca düşünüyor..."):
                 response = st.session_state.chat.send_message(prompt)
                 full_response = response.text
                 st.markdown(full_response)
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
         except Exception as e:
-            st.error(f"Bir hata oluştu. Lütfen API anahtarınızı veya internetinizi kontrol edin. Hata: {e}")
+            # Hata mesajını daha detaylı gösterelim
+            st.error(f"Bir sorun oluştu. Hata detayı: {e}")
+            st.info("İpucu: Eğer 404 hatası devam ederse, Google AI Studio'dan yeni bir API anahtarı almayı deneyebilirsiniz.")
