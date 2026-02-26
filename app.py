@@ -26,56 +26,55 @@ ETKİLEŞİM KURALLARI:
 • Asla tek seferde uzun bir cevap verme. Her seferinde sadece bir adım ilerle.
 • Bir soru sor ve öğrencinin cevabını bekle.
 • Öğrenci 'İşte bu!' diyene kadar araştırma sorusunu rafine etmeye devam et.
-
-BAŞLAT: Önce kendini tanıt ve şu kanca soruyla başla: 'Şu an akademik dünyada seni en çok rahatsız eden, eksik bulduğun veya 'bunun doğrusu aslında şu olabilir' dediğin o spesifik olgu nedir?' Ardından öğrencinin ilgi alanını sor.
 """
 
 # 3. API Yapılandırması
 if "GEMINI_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    # API anahtarını tanımlarken transport="rest" ekleyerek gRPC hatalarını ve sürüm karmaşasını önlüyoruz
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport="rest")
 else:
     st.error("Secrets bulunamadı!")
     st.stop()
 
-# 4. Model Seçimi (404 Hatasını Önleyen Mekanizma)
-# Bu liste içindeki modellerden hangisi sisteminde varsa onu seçecek
-model_names = ["gemini-1.5-flash", "models/gemini-1.5-flash", "gemini-pro"]
-model = None
+# 4. Model Seçimi ve Otomatik Sürüm Deneme
+@st.cache_resource
+def load_model():
+    # Hata veren 404 sorununu aşmak için en güncel isimlendirmeleri deniyoruz
+    available_models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+    
+    for model_name in available_models:
+        try:
+            m = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction=SYSTEM_PROMPT
+            )
+            # Modeli test et
+            m.generate_content("test")
+            return m
+        except Exception:
+            continue
+    return None
 
-for m_name in model_names:
-    try:
-        model = genai.GenerativeModel(model_name=m_name)
-        # Modelin gerçekten çalışıp çalışmadığını test ediyoruz
-        model.generate_content("test") 
-        break 
-    except:
-        continue
+model = load_model()
 
 if model is None:
-    st.error("Üzgünüm, Google API modellerine şu an ulaşılamıyor. Lütfen API anahtarınızı kontrol edin.")
+    st.error("API şu an yanıt vermiyor. Lütfen Google AI Studio'dan API anahtarınızın 'Active' olduğundan emin olun.")
     st.stop()
 
-# 5. Sohbet Yönetimi
+# 5. Sohbet Geçmişi
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.chat = model.start_chat(history=[])
     
-    # Sisteme kim olduğunu hatırlat (Hata vermemesi için güvenli mod)
-    try:
-        st.session_state.chat.send_message(f"TALİMAT: {SYSTEM_PROMPT}")
-    except:
-        pass
-        
-    initial_text = "Merhaba! Ben Akademik Danışman AI. Akademik dünyada seni en çok rahatsız eden o spesifik olgu nedir?"
+    initial_text = "Merhaba! Ben Akademik Danışman AI. Akademik dünyada seni en çok rahatsız eden, eksik bulduğun o spesifik olgu nedir?"
     st.session_state.messages.append({"role": "assistant", "content": initial_text})
 
 for msg in st.session_state.messages:
-    if msg["role"] != "system": # Sistem talimatını ekranda gösterme
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
 # 6. Kullanıcı Girişi
-if user_input := st.chat_input("Buraya yazın..."):
+if user_input := st.chat_input("Mesajınızı yazın..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.write(user_input)
@@ -86,4 +85,4 @@ if user_input := st.chat_input("Buraya yazın..."):
             st.write(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
-            st.error(f"Hata: {e}")
+            st.error(f"Hata detayı: {e}")
