@@ -1,21 +1,13 @@
 import streamlit as st
 import google.generativeai as genai
 
-# 1. Sayfa Konfigürasyonu
-st.set_page_config(page_title="Akademik Danışman AI", page_icon="🎓", layout="centered")
-
-# Görsel İyileştirme
-st.markdown("""
-    <style>
-    .stChatMessage { border-radius: 15px; margin-bottom: 10px; }
-    .stChatFloatingInputContainer { background-color: rgba(0,0,0,0); }
-    </style>
-    """, unsafe_allow_html=True)
+# 1. Sayfa Ayarları
+st.set_page_config(page_title="Akademik Danışman AI", page_icon="🎓")
 
 st.title("🎓 Akademik Danışman AI")
 st.caption("Sokratik Yöntemle Tez ve Araştırma Sorusu Mimarı")
 
-# 2. Senin Orijinal Süper Promptun
+# 2. Senin Süper Promptun
 SYSTEM_PROMPT = """
 Sen, yüksek lisans öğrencilerine tez konusu ve araştırma sorusu belirleme konusunda rehberlik eden, metodoloji uzmanı bir Akademik Danışman AI'sısın. Görevin, öğrenci en özgün ve uygulanabilir araştırma sorusuna ulaşana kadar ona Sokratik bir yöntemle rehberlik etmektir.
 
@@ -38,53 +30,49 @@ ETKİLEŞİM KURALLARI:
 BAŞLAT: Önce kendini tanıt ve şu kanca soruyla başla: 'Şu an akademik dünyada seni en çok rahatsız eden, eksik bulduğun veya 'bunun doğrusu aslında şu olabilir' dediğin o spesifik olgu nedir?' Ardından öğrencinin ilgi alanını sor.
 """
 
-# 3. API Ayarları
+# 3. API Yapılandırması
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 else:
-    st.error("Hata: Streamlit Secrets içinde GEMINI_API_KEY bulunamadı!")
+    st.error("Secrets bulunamadı!")
     st.stop()
 
-# 4. Model Kurulumu (404 hatasını önlemek için en garantili isimler)
+# 4. Model Kurulumu (Hata veren Flash yerine en stabil olan 'gemini-pro'yu seçtik)
 @st.cache_resource
-def get_model():
-    # 'gemini-1.5-flash' yerine en geniş kapsamlı 'gemini-1.5-flash-latest' deniyoruz
+def load_model():
     return genai.GenerativeModel(
-        model_name="gemini-1.5-flash-latest",
-        system_instruction=SYSTEM_PROMPT
+        model_name="gemini-pro", # Bu isim en stabil olanıdır
+        system_instruction=None # gemini-pro doğrudan sistem talimatını desteklemeyebilir, aşağıda düzelteceğiz
     )
 
-try:
-    model = get_model()
-except Exception:
-    # Eğer flash hata verirse en kararlı model olan gemini-pro'ya düşer
-    model = genai.GenerativeModel(model_name="gemini-pro", system_instruction=SYSTEM_PROMPT)
+model = load_model()
 
-# 5. Sohbet Geçmişi (Session State)
+# 5. Sohbet Başlatma
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    # Sistem promptunu konuşmanın en başına gizli bir şekilde ekliyoruz
     st.session_state.chat = model.start_chat(history=[])
+    # İlk mesajda sistem promptunu göndererek AI'ya kim olduğunu öğretiyoruz
+    st.session_state.chat.send_message(f"SİSTEM TALİMATI: {SYSTEM_PROMPT}\n\nLütfen kendini tanıt ve başla.")
     
-    # Başlangıç Mesajı
-    intro = "Merhaba! Ben Akademik Danışman AI. Şu an akademik dünyada seni en çok rahatsız eden, eksik bulduğun veya 'bunun doğrusu aslında şu olabilir' dediğin o spesifik olgu nedir? Önce biraz ilgi alanlarından bahsedebilirsin."
-    st.session_state.messages.append({"role": "assistant", "content": intro})
+    initial_text = "Merhaba! Ben Akademik Danışman AI. Akademik dünyada seni en çok rahatsız eden, eksik bulduğun o spesifik olgu nedir?"
+    st.session_state.messages.append({"role": "assistant", "content": initial_text})
 
-# Geçmiş mesajları göster
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Mesajları göster
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
-# 6. Kullanıcı Girişi ve Yanıt
+# 6. Kullanıcı Girişi
 if user_input := st.chat_input("Mesajınızı yazın..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
-        st.markdown(user_input)
+        st.write(user_input)
 
     with st.chat_message("assistant"):
         try:
-            with st.spinner("Akademik literatür taranıyor..."):
-                response = st.session_state.chat.send_message(user_input)
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            response = st.session_state.chat.send_message(user_input)
+            st.write(response.text)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
-            st.error(f"Bir bağlantı hatası oluştu. Lütfen sayfayı yenileyin. Detay: {e}")
+            st.error(f"Hata oluştu: {e}")
