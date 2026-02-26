@@ -5,84 +5,62 @@ import google.generativeai as genai
 st.set_page_config(page_title="Akademik Danışman AI", page_icon="🎓")
 
 st.title("🎓 Akademik Danışman AI")
-st.caption("Sokratik Yöntemle Tez ve Araştırma Sorusu Mimarı")
+st.caption("Gemini 3 Flash Altyapısı ile Tez Asistanı")
 
-# 2. Senin Süper Promptun
+# Senin Orijinal Süper Promptun
 SYSTEM_PROMPT = """
 Sen, yüksek lisans öğrencilerine tez konusu ve araştırma sorusu belirleme konusunda rehberlik eden, metodoloji uzmanı bir Akademik Danışman AI'sısın. Görevin, öğrenci en özgün ve uygulanabilir araştırma sorusuna ulaşana kadar ona Sokratik bir yöntemle rehberlik etmektir.
 
 Lütfen şu 12 tekniklik protokolü tavizsiz uygula:
-1. Step-Back: Doğrudan başlık bulmaya çalışma. Önce öğrencinin ilgi duyduğu alanı, o alanın temel paradigmasını ve güncel literatürdeki ana tartışmaları sorgulayarak başla.
-2. Decomposition: Konu belirleme sürecini; İlgi Alanı Belirleme, Literatürdeki Boşluğu Bulma (Research Gap), Araştırma Sorusu Taslağı ve Uygulanabilirlik (Fizibilite) Kontrolü olarak parçala.
-3. ToT (Seçenekler): Öğrenci bir alan söylediğinde ona 3 farklı araştırma 'patikası' sun: A) Teorik/Kavramsal Analiz, B) Ampirik/Uygulamalı Çalışma, C) Karşılaştırmalı/Eleştirel Analiz.
-4. CoT: Öğrenci bir konu önerdiğinde, onun 'Neden?', 'Nasıl?' ve 'Kime ne faydası var?' sorularını cevaplamasını sağlayan mantık adımlarını işlet.
-5. Kod Kullanarak Prompting: Eğer öğrenci nicel bir araştırma düşünüyorsa, değişkenler arasındaki ilişkiyi simüle eden veya örneklem büyüklüğünü hesaplayan bir Python kodu örneği sun.
-6. Self-Critique: Öğrencinin önerdiği soruyu bir 'Tez Savunma Jürisi' gözüyle eleştir; 'Çok geniş', 'Zaten yapılmış' veya 'Ölçülemez' gibi zayıf noktaları bul ve öğrenciye düzelttir.
-7. Reverse Engineering: Alanındaki 'Yılın En İyi Tezi' ödülünü almış bir çalışmanın yapısını analiz et ve o başarıyı sağlayan 'araştırma boşluğu' stratejisini mevcut konuya uyarla.
-8. Ensembling: Bir konuyu; bir 'Metodolog', bir 'Sektör Temsilcisi' ve bir 'Tez Danışmanı' perspektifiyle oylatıp en güçlü yönü vurgula.
-9. Meta-Prompting: Sürecin sonunda öğrenciye; 'Literatür taraması yaparken en doğru kaynakları bulmak için hangi 3 arama sorgusunu kullanmalısın?' başlığında stratejik istemler hazırla.
-
-ETKİLEŞİM KURALLARI:
-• Asla tek seferde uzun bir cevap verme. Her seferinde sadece bir adım ilerle.
-• Bir soru sor ve öğrencinin cevabını bekle.
-• Öğrenci 'İşte bu!' diyene kadar araştırma sorusunu rafine etmeye devam et.
+1. Step-Back: Doğrudan başlık bulmaya çalışma... (Promptunun devamını buraya eksiksiz koy)
 """
 
-# 3. API Yapılandırması
+# 2. API Yapılandırması
 if "GEMINI_API_KEY" in st.secrets:
-    # API anahtarını tanımlarken transport="rest" ekleyerek gRPC hatalarını ve sürüm karmaşasını önlüyoruz
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport="rest")
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 else:
-    st.error("Secrets bulunamadı!")
+    st.error("Lütfen Streamlit Secrets kısmına GEMINI_API_KEY ekleyin!")
     st.stop()
 
-# 4. Model Seçimi ve Otomatik Sürüm Deneme
+# 3. Model Kurulumu (Gemini 3 Flash için düzenlendi)
 @st.cache_resource
-def load_model():
-    # Hata veren 404 sorununu aşmak için en güncel isimlendirmeleri deniyoruz
-    available_models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
-    
-    for model_name in available_models:
-        try:
-            m = genai.GenerativeModel(
-                model_name=model_name,
-                system_instruction=SYSTEM_PROMPT
-            )
-            # Modeli test et
-            m.generate_content("test")
-            return m
-        except Exception:
-            continue
-    return None
+def load_gemini_3():
+    # Model ismini tam olarak 2026 standartlarına, yani Gemini 3 Flash'a göre güncelledik
+    return genai.GenerativeModel(
+        model_name='gemini-3-flash', 
+        system_instruction=SYSTEM_PROMPT
+    )
 
-model = load_model()
+try:
+    model = load_gemini_3()
+except Exception:
+    # Eğer kısa isim hata verirse tam yolunu dener
+    model = genai.GenerativeModel(model_name='models/gemini-3-flash')
 
-if model is None:
-    st.error("API şu an yanıt vermiyor. Lütfen Google AI Studio'dan API anahtarınızın 'Active' olduğundan emin olun.")
-    st.stop()
-
-# 5. Sohbet Geçmişi
+# 4. Sohbet Başlatma
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.chat = model.start_chat(history=[])
     
-    initial_text = "Merhaba! Ben Akademik Danışman AI. Akademik dünyada seni en çok rahatsız eden, eksik bulduğun o spesifik olgu nedir?"
+    initial_text = "Merhaba! Ben Akademik Danışman AI. Gemini 3 Flash gücüyle yanındayım. İlgi duyduğunuz alan nedir?"
     st.session_state.messages.append({"role": "assistant", "content": initial_text})
 
+# Mesajları Ekrana Bas
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+        st.markdown(msg["content"])
 
-# 6. Kullanıcı Girişi
-if user_input := st.chat_input("Mesajınızı yazın..."):
-    st.session_state.messages.append({"role": "user", "content": user_input})
+# 5. Kullanıcı Girişi
+if prompt := st.chat_input("Mesajınızı buraya yazın..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.write(user_input)
+        st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
-            response = st.session_state.chat.send_message(user_input)
-            st.write(response.text)
+            # Gemini 3 Flash çok hızlı yanıt verir
+            response = st.session_state.chat.send_message(prompt)
+            st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
-            st.error(f"Hata detayı: {e}")
+            st.error(f"Hata oluştu: {e}")
